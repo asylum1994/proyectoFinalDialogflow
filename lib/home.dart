@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:flutter/services.dart';
+
+import 'package:dialogflow_grpc/v2beta1.dart';
+import 'package:dialogflow_grpc/generated/google/cloud/dialogflow/v2beta1/session.pb.dart';
+import 'package:dialogflow_grpc/dialogflow_auth.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -11,16 +16,20 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
+  DialogflowGrpcV2Beta1? dialogflow;
+
   SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   String _lastWords = 'presiona el boton para empezar a hablar';
-
-  bool audioCompleto = false;
+  String? _responseDialog;
 
   /// flutter text to speech
   FlutterTts flutterTts = FlutterTts();
   final TextEditingController textEditingController = TextEditingController();
 
+  //////////////////////////////////////////////7
+
+  //////////////////////////////////////////////////77
   speak() async {
     await flutterTts.setLanguage("es-BO");
     await flutterTts.setPitch(1); // 0.5 to 1.5
@@ -28,10 +37,18 @@ class _HomeState extends State<Home> {
     // bool isCompleted = await flutterTts.awaitSpeakCompletion(true);
   }
 
+  speakDialogFlow(text) async {
+    await flutterTts.setLanguage("es-BO");
+    await flutterTts.setPitch(1); // 0.5 to 1.5
+    await flutterTts.speak(text);
+    // bool isCompleted = await flutterTts.awaitSpeakCompletion(true);
+  }
+
   //////////////////////////////////////////////////////////////////////////////
   @override
   void initState() {
     super.initState();
+    inicioPlugin();
     _initSpeech();
   }
 
@@ -62,6 +79,20 @@ class _HomeState extends State<Home> {
     setState(() {
       _lastWords = result.recognizedWords;
     });
+  }
+
+  Future<void> inicioPlugin() async {
+    final cuentaServicio = ServiceAccount.fromString(
+        '${(await rootBundle.loadString('assets/reservaMotocicletas.json'))}');
+    dialogflow = DialogflowGrpcV2Beta1.viaServiceAccount(cuentaServicio);
+  }
+
+  void sendIntent(texto) async {
+    DetectIntentResponse? datos =
+        await dialogflow?.detectIntent(texto, 'es-419');
+    String? textocompleto = datos?.queryResult.fulfillmentText;
+    _responseDialog = textocompleto;
+    print(_responseDialog);
   }
 
   @override
@@ -95,9 +126,12 @@ class _HomeState extends State<Home> {
         ElevatedButton(
           onPressed: () {
             setState(() {
-              _speechToText.isNotListening
-                  ? _startListening()
-                  : _stopListening();
+              if (_speechToText.isNotListening) {
+                sendIntent(_lastWords);
+                _startListening();
+              } else {
+                _stopListening();
+              }
             });
           },
           child: Icon(
@@ -114,7 +148,8 @@ class _HomeState extends State<Home> {
         ElevatedButton(
           onPressed: () {
             setState(() {
-              speak();
+              //speak();
+              speakDialogFlow(_responseDialog);
             });
           },
           child: Icon(
